@@ -645,6 +645,7 @@
         // Smart Aggregation State (Android Fix)
         let transcriptBuffer = '';
         let bufferTimer = null;
+        let lastFinalTranscript = ''; // For strict upstream deduplication
 
         // Initialize
         if (geminiApiKey) {
@@ -706,11 +707,24 @@
                 
                 // Smart Aggregation Logic
                 if (finalTranscript) {
+                    const cleanTranscript = finalTranscript.trim();
+                    
+                    // Strict Userstream Deduplication (Android Loop Fix)
+                    // 1. Ignore if identical to the very last final result received
+                    // 2. Ignore if the buffer already ends with this text (prevent "Hello" + "Hello")
+                    if (cleanTranscript === lastFinalTranscript || 
+                        transcriptBuffer.trim().endsWith(cleanTranscript)) {
+                        console.log('Loop duplicate detected, ignoring:', cleanTranscript);
+                        return;
+                    }
+
+                    lastFinalTranscript = cleanTranscript;
+
                     // Reset timer
                     if (bufferTimer) clearTimeout(bufferTimer);
                     
                     // Append to buffer
-                    transcriptBuffer += (transcriptBuffer ? ' ' : '') + finalTranscript.trim();
+                    transcriptBuffer += (transcriptBuffer ? ' ' : '') + cleanTranscript;
                     
                     // Update UI to show waiting state
                     interimDisplay.textContent = transcriptBuffer + ' ...';
@@ -719,6 +733,7 @@
                     // Set timer to process after 1.5s of silence
                     bufferTimer = setTimeout(() => {
                         flushBuffer();
+                        lastFinalTranscript = ''; // Reset after flush so simple repeats (legit ones) can work later
                     }, 1500);
                 } 
                 

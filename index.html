@@ -752,8 +752,11 @@
                     // Strict Userstream Deduplication (Android Loop Fix)
                     // 1. Ignore if identical to the very last final result received
                     // 2. Ignore if the buffer already ends with this text (prevent "Hello" + "Hello")
+                    // FIX: Check the ACTIVE buffer (Batch or Realtime)
+                    const bufferToCheck = isBatchMode ? batchBuffer : transcriptBuffer;
+                    
                     if (cleanTranscript === lastFinalTranscript || 
-                        transcriptBuffer.trim().endsWith(cleanTranscript)) {
+                        bufferToCheck.trim().endsWith(cleanTranscript)) {
                         console.log('Loop duplicate detected, ignoring:', cleanTranscript);
                         return;
                     }
@@ -1348,16 +1351,21 @@
         // --- Event Listeners ---
         micBtn.addEventListener('click', () => {
             if (isRecording) {
+                // STOPPING
                 isRecording = false;
                 recognition.stop();
                 clearTimeout(restartTimer);
                 
                 // If Batch Mode, Trigger Processing NOW
                 if (isBatchMode) {
-                    processBatchInput();
+                    // Slight delay to allow any pending 'onresult' to finish buffering
+                    setTimeout(() => {
+                        processBatchInput();
+                    }, 200);
                 }
                 
             } else {
+                // STARTING
                 try { recognition.start(); } catch(e){}
             }
         });

@@ -807,41 +807,67 @@
                 }
             };
 
-            // --- Advanced Deduplication Helper ---
+            // --- Advanced Deduplication Helper (Android Fix 3.0) ---
             function deduplicateResult(newText, lastText, buffer) {
                 if (!newText) return null;
                 const newT = newText.trim();
-                const lastT = lastText ? lastText.trim() : '';
                 const buf = buffer ? buffer.trim() : '';
 
-                // 1. Exact Match with Last (Basic Loop)
-                if (newT === lastT) return null;
+                // Normalization for comparison (ignore punctuation/spaces/case)
+                const normalize = (str) => str.toLowerCase().replace(/[\s\t\n\r、。！？,.!?]/g, '');
 
-                // 2. Exact Match with Buffer End (Redundancy)
-                if (buf.endsWith(newT)) return null;
+                const normNew = normalize(newT);
+                const normBuf = normalize(buf);
 
-                // 3. Extension Check ("Hello" -> "Hello World")
-                // If newText STARTS with lastText, it's likely an extension. We only want " World".
-                if (lastT && newT.startsWith(lastT)) {
-                    const suffix = newT.substring(lastT.length).trim();
-                    // If suffix is empty (meaning newT == lastT), ignore
-                    if (!suffix) return null;
-                    return suffix;
-                }
-
-                // 4. Ghosting Check ("Hello World" -> "World")
-                // If lastText ENDS with newText, it's likely a ghosting echo. Ignore.
-                if (lastT && lastT.endsWith(newT)) {
-                     // CAUTION: Only ignore if it is significantly long or identical tail
-                     // Prevents "Test" -> "Test" (covered by 1), but "This is a test" -> "test"
+                // 1. Exact Fail-safe: If normalized buffer ends with normalized new text, ignore.
+                // Handles "Hello." -> "Hello" (Ghosting)
+                if (normBuf.endsWith(normNew)) {
+                     // CAUTION: Ensure we don't block "Test" after "Test" if they are distinct in time, 
+                     // but here we are checking the *active buffer*. If the buffer *already* has it, we skip.
                      return null;
                 }
                 
-                // 5. Buffer Partial overlap Check
-                // Sometimes "Hello" + "Hello World" -> Buffer "Hello" + " World" (Good)
-                // But sometimes "Hello" + "Hello" -> Buffer "Hello" (Good)
+                // 2. Overlap Detection (The "Context Correction" Fix)
+                // We look for the largest overlap where the END of the Buffer matches the START of the NewText.
+                // Buffer: "... Hello"
+                // New: "Hello World"
+                // Overlap: "Hello" -> Append " World"
                 
+                // We limit overlap check to the suffix of buffer (e.g., last 50 chars) for performance
+                const bufferTail = buf.slice(-Math.max(buf.length, 100)); 
+                const overlapLen = findBestOverlap(bufferTail, newT);
+                
+                if (overlapLen > 0) {
+                     // Return only the non-overlapping part
+                     const suffix = newT.substring(overlapLen).trim();
+                     return suffix.length > 0 ? suffix : null; // If suffix empty, it means fully consumed (duplicate)
+                }
+
+                // 3. Fallback: If no overlap, assume it's new text.
                 return newT;
+            }
+            
+            // Finds the length of the longest overlap (Buffer Suffix == NewText Prefix)
+            // Returns the length of the matching prefix in NewText.
+            function findBestOverlap(tail, newText) {
+                const limit = Math.min(tail.length, newText.length);
+                const normTail = tail.toLowerCase().replace(/[\s\t\n\r、。！？,.!?]/g, '');
+                
+                // We iterate from max possible overlap down to 1
+                // We check normalized versions to ignore punctuation changes
+                for (let len = limit; len > 0; len--) {
+                    const tailSub = tail.substring(tail.length - len);
+                    const newSub = newText.substring(0, len);
+                    
+                    const nTail = tailSub.toLowerCase().replace(/[\s\t\n\r、。！？,.!?]/g, '');
+                    const nNew = newSub.toLowerCase().replace(/[\s\t\n\r、。！？,.!?]/g, '');
+                    
+                    // If normalized versions match significantly (at least 2 chars or full length if short)
+                    if (nTail === nNew && nTail.length >= 2) {
+                        return len;
+                    }
+                }
+                return 0;
             }
 
             recognition.onerror = (event) => {

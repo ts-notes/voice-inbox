@@ -727,6 +727,12 @@
                 } else {
                     updateUI(false);
                     releaseWakeLock();
+                    
+                    // FIX: Trigger Batch Processing in OnEnd to ensure full stop
+                    if (isBatchMode && batchBuffer.trim()) {
+                        console.log('Triggering batch process on end');
+                        processBatchInput();
+                    }
                 }
             };
 
@@ -1357,11 +1363,9 @@
                 clearTimeout(restartTimer);
                 
                 // If Batch Mode, Trigger Processing NOW
-                if (isBatchMode) {
-                    // Slight delay to allow any pending 'onresult' to finish buffering
-                    setTimeout(() => {
-                        processBatchInput();
-                    }, 200);
+                // Moved to onend for reliability
+                 if (isBatchMode) {
+                    console.log('Manual stop in batch mode, waiting for onend...');
                 }
                 
             } else {

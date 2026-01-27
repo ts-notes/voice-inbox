@@ -755,23 +755,24 @@
                 if (finalTranscript) {
                     const cleanTranscript = finalTranscript.trim();
                     
-                    // Strict Userstream Deduplication (Android Loop Fix)
-                    // 1. Ignore if identical to the very last final result received
-                    // 2. Ignore if the buffer already ends with this text (prevent "Hello" + "Hello")
-                    // FIX: Check the ACTIVE buffer (Batch or Realtime)
-                    const bufferToCheck = isBatchMode ? batchBuffer : transcriptBuffer;
+                    // Advanced Deduplication (Android Fix 2.0)
+                    // Logic to handle overlaps, extensions, and exact duplicates.
                     
-                    if (cleanTranscript === lastFinalTranscript || 
-                        bufferToCheck.trim().endsWith(cleanTranscript)) {
-                        console.log('Loop duplicate detected, ignoring:', cleanTranscript);
-                        return;
+                    const bufferToCheck = isBatchMode ? batchBuffer : transcriptBuffer;
+                    const safeToAppend = deduplicateResult(cleanTranscript, lastFinalTranscript, bufferToCheck);
+                    
+                    if (!safeToAppend) {
+                         console.log('Duplicate/Ghost detected, ignoring:', cleanTranscript);
+                         return;
                     }
-
+                    
+                    // Update state with the *new* full transcript concept for next comparison
+                    // If it was an extension, next duplications need to know the extended version
                     lastFinalTranscript = cleanTranscript;
 
                     if (isBatchMode) {
                         // BATCH MODE: Accumulate everything, no timer
-                        batchBuffer += (batchBuffer ? ' ' : '') + cleanTranscript;
+                        batchBuffer += (batchBuffer ? ' ' : '') + safeToAppend;
                         transcriptBuffer = ''; // Clear strict buffer unused here
                         
                         // Update UI
@@ -785,7 +786,7 @@
                         if (bufferTimer) clearTimeout(bufferTimer);
                         
                         // Append to buffer
-                        transcriptBuffer += (transcriptBuffer ? ' ' : '') + cleanTranscript;
+                        transcriptBuffer += (transcriptBuffer ? ' ' : '') + safeToAppend;
                         
                         // Update UI to show waiting state
                         interimDisplay.textContent = transcriptBuffer + ' ...';
@@ -805,6 +806,43 @@
                     interimDisplay.textContent = (currentMain ? currentMain + ' ' : '') + interimTranscript;
                 }
             };
+
+            // --- Advanced Deduplication Helper ---
+            function deduplicateResult(newText, lastText, buffer) {
+                if (!newText) return null;
+                const newT = newText.trim();
+                const lastT = lastText ? lastText.trim() : '';
+                const buf = buffer ? buffer.trim() : '';
+
+                // 1. Exact Match with Last (Basic Loop)
+                if (newT === lastT) return null;
+
+                // 2. Exact Match with Buffer End (Redundancy)
+                if (buf.endsWith(newT)) return null;
+
+                // 3. Extension Check ("Hello" -> "Hello World")
+                // If newText STARTS with lastText, it's likely an extension. We only want " World".
+                if (lastT && newT.startsWith(lastT)) {
+                    const suffix = newT.substring(lastT.length).trim();
+                    // If suffix is empty (meaning newT == lastT), ignore
+                    if (!suffix) return null;
+                    return suffix;
+                }
+
+                // 4. Ghosting Check ("Hello World" -> "World")
+                // If lastText ENDS with newText, it's likely a ghosting echo. Ignore.
+                if (lastT && lastT.endsWith(newT)) {
+                     // CAUTION: Only ignore if it is significantly long or identical tail
+                     // Prevents "Test" -> "Test" (covered by 1), but "This is a test" -> "test"
+                     return null;
+                }
+                
+                // 5. Buffer Partial overlap Check
+                // Sometimes "Hello" + "Hello World" -> Buffer "Hello" + " World" (Good)
+                // But sometimes "Hello" + "Hello" -> Buffer "Hello" (Good)
+                
+                return newT;
+            }
 
             recognition.onerror = (event) => {
                 console.error('Speech recognition error', event.error);

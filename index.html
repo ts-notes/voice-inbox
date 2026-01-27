@@ -641,6 +641,10 @@
         // Deduplication State
         let lastProcessedText = '';
         let lastProcessedTime = 0;
+        
+        // Smart Aggregation State (Android Fix)
+        let transcriptBuffer = '';
+        let bufferTimer = null;
 
         // Initialize
         if (geminiApiKey) {
@@ -700,11 +704,27 @@
                     }
                 }
                 
+                // Smart Aggregation Logic
                 if (finalTranscript) {
-                    interimDisplay.textContent = '';
-                    await processInput(finalTranscript.trim());
-                } else if (interimTranscript) {
-                    interimDisplay.textContent = interimTranscript;
+                    // Reset timer
+                    if (bufferTimer) clearTimeout(bufferTimer);
+                    
+                    // Append to buffer
+                    transcriptBuffer += (transcriptBuffer ? ' ' : '') + finalTranscript.trim();
+                    
+                    // Update UI to show waiting state
+                    interimDisplay.textContent = transcriptBuffer + ' ...';
+                    interimDisplay.style.opacity = '1';
+                    
+                    // Set timer to process after 1.5s of silence
+                    bufferTimer = setTimeout(() => {
+                        flushBuffer();
+                    }, 1500);
+                } 
+                
+                if (interimTranscript) {
+                    // Show buffer + current interim
+                    interimDisplay.textContent = (transcriptBuffer ? transcriptBuffer + ' ' : '') + interimTranscript;
                 }
             };
 
@@ -722,6 +742,16 @@
         }
 
         // --- Core Functions ---
+        
+        async function flushBuffer() {
+            if (!transcriptBuffer) return;
+            
+            const textToProcess = transcriptBuffer;
+            transcriptBuffer = ''; // Clear immediately
+            interimDisplay.textContent = ''; // Clear UI
+            
+            await processInput(textToProcess);
+        }
 
         async function processInput(text) {
             if (!text) return;

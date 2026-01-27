@@ -1,0 +1,20 @@
+{
+    "name": "Voice Inbox AI",
+    "short_name": "VoiceInbox",
+    "start_url": "./index.html",
+    "display": "standalone",
+    "background_color": "#121212",
+    "theme_color": "#121212",
+    "icons": [
+        {
+            "src": "https://raw.githubusercontent.com/google-gemini/voice-inbox-icons/main/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "https://raw.githubusercontent.com/google-gemini/voice-inbox-icons/main/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}

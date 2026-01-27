@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="VoiceInbox">
+    <link rel="manifest" href="manifest.json">
+    <title>Voice Inbox AI</title>
+    <!-- Modern Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #121212;
+            --surface-color: #1e1e1e;
+            --surface-hover: #2c2c2c;
+            --primary-color: #e44232;
+            --primary-hover: #d63a2b;
+            --text-primary: #ffffff;
+            --text-secondary: #b3b3b3;
+            --text-muted: #666666;
+            --accent-gradient: linear-gradient(135deg, #e44232 0%, #ff7b72 100%);
+            --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
+            --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.4);
+            --border-color: #333;
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Container */
+        .container {
+            width: 100%;
+            max-width: 600px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            position: relative;
+        }
+
+        /* Header */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 20px;
+            margin-bottom: 10px;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin: 0;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .icon-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .icon-btn:hover {
+            background-color: var(--surface-hover);
+            color: white;
+        }
+
+        .icon-btn svg {
+            width: 24px;
+            height: 24px;
+            fill: currentColor;
+        }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center; /* Center horizontally */
+            justify-content: center; /* Center vertically if needed */
+            margin-bottom: 20px;
+            position: relative;
+            min-height: 140px; /* Reserve space */
+        }
+
+        .mic-button {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: none;
+            background: var(--surface-color);
+            box-shadow: var(--shadow-lg);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            z-index: 10;
+        }
+
+        .mic-button svg {
+            width: 32px;
+            height: 32px;
+            fill: var(--text-secondary);
+            transition: fill 0.3s ease;
+        }
+
+        .mic-button.active {
+            background: var(--accent-gradient);
+            transform: scale(1.1);
+            box-shadow: 0 0 20px rgba(228, 66, 50, 0.5);
+        }
+
+        .mic-button.active svg {
+            fill: white;
+        }
+
+        .mic-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        /* Pulse Animation */
+        .pulse-ring {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: rgba(228, 66, 50, 0.4);
+            z-index: 1;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .mic-button.active ~ .pulse-ring {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { width: 80px; height: 80px; opacity: 0.6; }
+            100% { width: 160px; height: 160px; opacity: 0; }
+        }
+
+        .status-container {
+            margin-top: 20px;
+            text-align: center;
+            height: 40px; /* Fixed height to prevent layout shift */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+        }
+
+        .status-text {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .processing-indicator {
+            font-size: 0.8rem;
+            color: var(--primary-color);
+            display: none;
+            align-items: center;
+            gap: 6px;
+            margin-top: 4px;
+        }
+
+        .processing-indicator.show {
+            display: flex;
+        }
+
+        .spinner {
+            width: 12px;
+            height: 12px;
+            border: 2px solid var(--primary-color);
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Current Speech Display */
+        .current-input {
+            min-height: 24px;
+            margin-bottom: 20px;
+            font-size: 1rem;
+            color: var(--primary-color);
+            text-align: center;
+            font-style: italic;
+            opacity: 0.9;
+            padding: 0 10px;
+        }
+
+        /* Task List */
+        .task-list-container {
+            flex: 1;
+            overflow-y: auto;
+            padding-bottom: 80px; /* Bottom padding for scroll */
+            mask-image: linear-gradient(to bottom, black 95%, transparent 100%);
+            -webkit-mask-image: linear-gradient(to bottom, black 95%, transparent 100%);
+        }
+
+        #task-list, #completed-task-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .list-header {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin: 20px 0 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .list-header::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border-color);
+        }
+
+        .task-item {
+            background-color: var(--surface-color);
+            border-radius: 12px;
+            padding: 12px 16px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center; /* Center vertically */
+            gap: 12px;
+            animation: slideIn 0.3s ease-out;
+            box-shadow: var(--shadow-md);
+            transition: all 0.3s ease;
+        }
+
+        .task-item.completed {
+            opacity: 0.6;
+            background-color: transparent;
+            box-shadow: none;
+            border: 1px solid var(--border-color);
+        }
+
+        .checkbox {
+            width: 22px;
+            height: 22px;
+            border: 2px solid var(--text-secondary);
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.2s;
+        }
+
+        .checkbox.checked {
+            background-color: var(--text-secondary);
+            border-color: var(--text-secondary);
+        }
+
+        .checkbox svg {
+            width: 14px;
+            height: 14px;
+            fill: var(--bg-color);
+            display: none;
+        }
+
+        .checkbox.checked svg {
+            display: block;
+        }
+
+        .task-content {
+            flex: 1;
+            font-size: 1rem;
+            line-height: 1.5;
+            word-break: break-all;
+            transition: color 0.2s;
+        }
+
+        .task-item.completed .task-content {
+            text-decoration: line-through;
+            color: var(--text-muted);
+        }
+
+        .delete-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 4px;
+            opacity: 0;
+            transition: all 0.2s;
+        }
+
+        .task-item:hover .delete-btn,
+        .task-item:active .delete-btn {
+            opacity: 1;
+        }
+        
+        /* Mobile: always show delete button slightly */
+        @media (hover: none) {
+            .delete-btn { opacity: 0.5; }
+        }
+
+        .delete-btn:hover {
+            color: #ff4b4b;
+            opacity: 1 !important;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Settings Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+            z-index: 100;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .modal-overlay.open {
+            display: flex;
+            opacity: 1;
+        }
+
+        .modal {
+            background: var(--surface-color);
+            width: 90%;
+            max-width: 400px;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--border-color);
+            transform: translateY(20px);
+            transition: transform 0.3s;
+        }
+
+        .modal-overlay.open .modal {
+            transform: translateY(0);
+        }
+
+        .modal h2 {
+            margin: 0 0 16px;
+            font-size: 1.2rem;
+            color: var(--text-primary);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: white;
+            font-size: 1rem;
+            outline: none;
+        }
+
+        .form-group input:focus {
+            border-color: var(--primary-color);
+        }
+        
+        .form-hint {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 6px;
+            line-height: 1.4;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: opacity 0.2s;
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+        
+        .btn:hover { opacity: 0.8; }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            background: #333;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 0.9rem;
+            box-shadow: var(--shadow-lg);
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s;
+            z-index: 200;
+            white-space: nowrap;
+        }
+        
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .clear-btn {
+            background: var(--accent-gradient);
+            border: none;
+            border-radius: 20px;
+            color: white;
+            padding: 6px 16px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-left: auto;
+            box-shadow: var(--shadow-md);
+            transition: all 0.2s;
+        }
+
+        .clear-btn:active {
+            transform: scale(0.95);
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Voice Inbox AI</h1>
+            <div class="header-actions">
+                <button id="copy-btn" class="icon-btn" aria-label="Notion用にコピー" title="Notion用にコピー">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+                </button>
+                <button id="settings-btn" class="icon-btn" aria-label="設定" title="設定">
+                    <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L6.16 8.86c-.11.2-.06.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.11-.22.06-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+                </button>
+            </div>
+        </header>
+
+        <div class="controls">
+            <button id="mic-btn" class="mic-button" aria-label="録音開始/停止">
+                <svg viewBox="0 0 24 24">
+                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                    <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                </svg>
+            </button>
+            <div class="pulse-ring"></div>
+            
+            <div class="status-container">
+                <div id="status" class="status-text">タップして開始</div>
+                <div id="processing-indicator" class="processing-indicator">
+                    <div class="spinner"></div>
+                    AI処理中...
+                </div>
+            </div>
+        </div>
+
+        <div id="interim-result" class="current-input"></div>
+
+        <div class="task-list-container">
+            <ul id="task-list">
+                <!-- Uncompleted Tasks -->
+            </ul>
+            
+            <div id="completed-header" class="list-header" style="display:none;">
+                <span>完了したタスク</span>
+                <span>完了したタスク</span>
+                <button id="clear-completed-btn" type="button" class="clear-btn">完了分を削除</button>
+            </div>
+            <ul id="completed-task-list">
+                <!-- Completed Tasks -->
+            </ul>
+        </div>
+    </div>
+
+    <!-- Custom Confirmation Modal -->
+    <div id="confirm-modal" class="modal-overlay">
+        <div class="modal">
+            <h2>確認</h2>
+            <p id="confirm-message" style="margin-bottom:20px; line-height:1.5;">本当に削除しますか？</p>
+            <div class="modal-actions">
+                <button id="confirm-cancel" class="btn btn-secondary">キャンセル</button>
+                <button id="confirm-ok" class="btn btn-primary" style="background:var(--primary-color);">削除する</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal-overlay">
+        <div class="modal">
+            <h2>設定</h2>
+            <div class="form-group">
+                <label for="model-select">AIモデル</label>
+                <select id="model-select" style="width:100%; padding:12px; background:var(--bg-color); border:1px solid var(--border-color); border-radius:8px; color:white; font-size:1rem; margin-bottom:12px;">
+                    <option value="gemini-3-flash-preview">Gemini 3.0 Flash Preview (Newest)</option>
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash (Stable)</option>
+                    <option value="gemini-2.0-flash-exp">Gemini 2.0 Flash Exp (Backup)</option>
+                </select>
+                <div class="form-hint">
+                    ※モデルによってはAPIキーの権限が必要です。エラーが出る場合は2.0/1.5を試してください。
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="api-key">Gemini API Key</label>
+                <input type="password" id="api-key" placeholder="AIを使うにはキーを入力">
+                <div class="form-hint">
+                    APIキーを設定すると音声テキストをAIが自動で整理・タスク化します。<br>
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--primary-color);">キーの取得はこちら</a>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="cancel-settings" class="btn btn-secondary">キャンセル</button>
+                <button id="save-settings" class="btn btn-primary">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast">メッセージ</div>
+
+    <script>
+        // DOM Elements
+        const micBtn = document.getElementById('mic-btn');
+        const statusText = document.getElementById('status');
+        const processingIndicator = document.getElementById('processing-indicator');
+        const interimDisplay = document.getElementById('interim-result');
+        const taskList = document.getElementById('task-list');
+        const completedTaskList = document.getElementById('completed-task-list');
+        const completedHeader = document.getElementById('completed-header');
+        const clearCompletedBtn = document.getElementById('clear-completed-btn');
+        
+        const settingsBtn = document.getElementById('settings-btn');
+        const copyBtn = document.getElementById('copy-btn');
+        const settingsModal = document.getElementById('settings-modal');
+        const apiKeyInput = document.getElementById('api-key');
+        const modelSelect = document.getElementById('model-select');
+        const saveSettingsBtn = document.getElementById('save-settings');
+        const cancelSettingsBtn = document.getElementById('cancel-settings');
+        const toast = document.getElementById('toast');
+        
+        // Custom Confirm Modal Elements
+        const confirmModal = document.getElementById('confirm-modal');
+        const confirmMessage = document.getElementById('confirm-message');
+        const confirmOkBtn = document.getElementById('confirm-ok');
+        const confirmCancelBtn = document.getElementById('confirm-cancel');
+
+        // State
+        let isRecording = false;
+        let recognition = null;
+        let wakeLock = null;
+        let restartTimer = null;
+        let tasks = [];
+        let geminiApiKey = localStorage.getItem('geminiApiKey') || '';
+        let selectedModel = localStorage.getItem('geminiModel') || 'gemini-2.5-flash';
+        let confirmCallback = null; // For custom modal
+
+        // Initialize
+        if (geminiApiKey) {
+            apiKeyInput.value = geminiApiKey;
+        }
+        if (selectedModel) {
+            modelSelect.value = selectedModel;
+        }
+        loadTasks();
+
+        // --- Speech Recognition ---
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.lang = 'ja-JP';
+            recognition.continuous = true;
+            recognition.interimResults = true;
+
+            recognition.onstart = () => {
+                isRecording = true;
+                updateUI(true);
+                requestWakeLock();
+            };
+
+            recognition.onend = () => {
+                if (isRecording) {
+                    console.log('Recognition ended, restarting...');
+                    // Fast restart for "Always On" feel
+                    restartTimer = setTimeout(() => {
+                        try {
+                            recognition.start();
+                        } catch (e) {
+                            console.error('Restart failed', e);
+                            // If immediate restart fails, try once more after a longer delay
+                             setTimeout(() => { try { recognition.start(); } catch(e){} }, 1000);
+                        }
+                    }, 100);
+                } else {
+                    updateUI(false);
+                    releaseWakeLock();
+                }
+            };
+
+            recognition.onresult = async (event) => {
+                let interimTranscript = '';
+                let finalTranscript = '';
+                
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    const result = event.results[i];
+                    const transcript = result[0].transcript;
+                    
+                    if (result.isFinal) {
+                        finalTranscript += transcript;
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+                
+                if (finalTranscript) {
+                    interimDisplay.textContent = '';
+                    await processInput(finalTranscript.trim());
+                } else if (interimTranscript) {
+                    interimDisplay.textContent = interimTranscript;
+                }
+            };
+
+            recognition.onerror = (event) => {
+                console.error('Speech recognition error', event.error);
+                if (event.error === 'not-allowed') {
+                    showToast('マイクの使用許可が必要です');
+                    isRecording = false;
+                    updateUI(false);
+                }
+            };
+        } else {
+            statusText.textContent = 'このブラウザは音声認識非対応です';
+            micBtn.disabled = true;
+        }
+
+        // --- Core Functions ---
+
+        async function processInput(text) {
+            if (!text) return;
+
+            // Optimistic update: show as processing indicator or temp task
+            // If API key is present, use AI. Else, raw text.
+            if (geminiApiKey) {
+                processingIndicator.textContent = 'AIタスク化中: ' + text.substring(0, 10) + '...';
+                processingIndicator.classList.add('show');
+                
+                try {
+                    const aiTaskTitle = await callGeminiAPI(text);
+                    addTask(aiTaskTitle || text, text); // Pass original text
+                } catch (err) {
+                    console.error('AI Processing Error:', err);
+                    showToast('エラー: ' + err.message);
+                    addTask(text, text); // Fallback logic, use raw text for both
+                } finally {
+                    processingIndicator.classList.remove('show');
+                }
+            } else {
+                addTask(text, text); // No AI, so task content is original text
+            }
+        }
+
+        // Helper for delay
+        const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+        async function callGeminiAPI(text, retryCount = 0) {
+            // Use selected model
+            const model = selectedModel || 'gemini-2.0-flash-exp';
+            const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`;
+            
+            const prompt = `
+            Role: Elite Executive Assistant.
+            Objective: Convert user's raw stream-of-consciousness speech into a single, concise, actionable Task Title (Japanese).
+
+            Input Context:
+            "${text}"
+            
+            Rules:
+            1. **Detect Intent**: Ignore conversational filler ("Umm", "I think"). Focus on what needs to be DONE.
+               - IF user says "Testing mic" -> Task: "マイクの動作環境を確認する"
+               - IF user says "Delete this" -> Task: "タスクの削除方法を確認する" (or similar relevant action)
+            2. **Fix Speech Errors**: If the text looks like a mishearing of a common meaningful phrase, correct it based on context.
+            3. **Format**: Verb-first, Japanese. No polite language (e.g. "Buy milk" -> "牛乳を買う", not "牛乳を買ってください").
+            4. **Output**: ONLY the final string. NO "Output:", NO quotes.
+            `;
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }]
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    console.error('API Error Details:', errorData);
+                    
+                    // Handle Rate Limiting (429) or Server Errors (503)
+                    if ((response.status === 429 || response.status === 503) && retryCount < 3) {
+                        const waitTime = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
+                        console.warn(`Rate limit hit. Retrying in ${waitTime}ms... (Attempt ${retryCount + 1})`);
+                        showToast(`AI混雑中...再試行します (${retryCount + 1}/3)`);
+                        
+                        await delay(waitTime);
+                        return callGeminiAPI(text, retryCount + 1);
+                    }
+
+                    let errorMsg = 'AI処理エラー';
+                    if (response.status === 404) errorMsg = `モデル ${model} が見つかりません (404)`;
+                    if (response.status === 403) errorMsg = 'APIキーが無効、または権限がありません (403)';
+                    if (response.status === 429) errorMsg = 'リクエスト過多です (429)';
+                    
+                    throw new Error(`${errorMsg}`);
+                }
+
+                const data = await response.json();
+                const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                
+                return generatedText ? generatedText.trim() : null;
+            } catch (error) {
+                console.error('Final API Error:', error);
+                throw error; // Re-throw to be caught by processInput
+            }
+        }
+
+        function addTask(content, originalText = '') {
+            const task = {
+                id: Date.now(),
+                content: content,
+                originalText: originalText, // Store original transcript
+                completed: false,
+                timestamp: new Date().toISOString()
+            };
+            
+            tasks.unshift(task); // Add to top
+            saveTasks();
+            renderTasks();
+        }
+
+        function toggleTaskCompletion(id) {
+            const task = tasks.find(t => t.id === id);
+            if (task) {
+                task.completed = !task.completed;
+                saveTasks();
+                renderTasks();
+            }
+        }
+
+        function deleteTask(id) {
+            if (confirm('このタスクを削除しますか？')) {
+                tasks = tasks.filter(t => t.id !== id);
+                saveTasks();
+                renderTasks();
+            }
+        }
+
+        function renderTasks() {
+            taskList.innerHTML = '';
+            completedTaskList.innerHTML = '';
+
+            const uncompleted = tasks.filter(t => !t.completed);
+            const completed = tasks.filter(t => t.completed);
+
+            // Render Uncompleted
+            uncompleted.forEach(task => {
+                taskList.appendChild(createTaskElement(task));
+            });
+
+            // Render Completed
+            if (completed.length > 0) {
+                completedHeader.style.display = 'flex';
+                completed.forEach(task => {
+                    completedTaskList.appendChild(createTaskElement(task));
+                });
+            } else {
+                completedHeader.style.display = 'none';
+            }
+        }
+
+        function createTaskElement(task) {
+            const li = document.createElement('li');
+            li.className = `task-item ${task.completed ? 'completed' : ''}`;
+            
+            const checkbox = document.createElement('div');
+            checkbox.className = `checkbox ${task.completed ? 'checked' : ''}`;
+            checkbox.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
+            checkbox.onclick = () => toggleTaskCompletion(task.id);
+
+            const content = document.createElement('div');
+            content.className = 'task-content';
+            
+            // Main Task Title
+            const titleSpan = document.createElement('div');
+            titleSpan.textContent = task.content;
+            content.appendChild(titleSpan);
+
+            // Original Transcript (Hidden by default)
+            if (task.originalText) {
+                const transcriptDiv = document.createElement('div');
+                transcriptDiv.className = 'task-transcript';
+                transcriptDiv.textContent = `🗣️ "${task.originalText}"`;
+                transcriptDiv.style.fontSize = '0.85rem';
+                transcriptDiv.style.color = 'var(--text-secondary)';
+                transcriptDiv.style.marginTop = '4px';
+                transcriptDiv.style.display = 'none'; // Hidden initially
+                content.appendChild(transcriptDiv);
+
+                // Toggle on click
+                content.onclick = () => {
+                   transcriptDiv.style.display = transcriptDiv.style.display === 'none' ? 'block' : 'none';
+                };
+                content.style.cursor = 'pointer';
+            }
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-btn';
+            deleteBtn.innerHTML = '✕';
+            deleteBtn.onclick = (e) => {
+                e.stopPropagation();
+                // Use global deleteTask which now uses custom modal
+                deleteTask(task.id);
+            };
+
+            li.appendChild(checkbox);
+            li.appendChild(content);
+            li.appendChild(deleteBtn);
+            
+            return li;
+        }
+
+        // --- Data Persistence ---
+        function saveTasks() {
+            localStorage.setItem('voiceInboxTasks_v2', JSON.stringify(tasks));
+        }
+
+        function loadTasks() {
+            // Try v2 first
+            const stored = localStorage.getItem('voiceInboxTasks_v2');
+            if (stored) {
+                tasks = JSON.parse(stored);
+            } else {
+                // Migrate v1
+                const v1 = localStorage.getItem('voiceInboxTasks');
+                if (v1) {
+                    try {
+                        const v1Tasks = JSON.parse(v1);
+                        tasks = v1Tasks.map(t => ({
+                            id: t.id,
+                            content: t.content,
+                            originalText: t.content, // For old tasks, originalText is the same as content
+                            completed: false,
+                            timestamp: t.timestamp || new Date().toISOString()
+                        }));
+                        saveTasks(); // Upgrade
+                    } catch(e) { console.error('Migration failed', e); }
+                }
+            }
+            renderTasks();
+        }
+
+        // --- CSV Export for Notion ---
+        // This function is replaced by copyToClipboard, but keeping it commented out for reference if needed.
+        /*
+        function exportToCSV() {
+            // Only export uncompleted tasks
+            const activeTasks = tasks.filter(t => !t.completed);
+
+            if (activeTasks.length === 0) {
+                showToast('エクスポート対象のタスクがありません');
+                return;
+            }
+
+            // Headers friendly for Notion
+            const headers = ['Name', 'Status', 'Date'];
+            const rows = activeTasks.map(t => {
+                // CSV Escaping
+                const safeContent = `"${t.content.replace(/"/g, '""')}"`;
+                const status = 'To Do'; // Always To Do for active tasks
+                const date = t.timestamp.split('T')[0]; // YYYY-MM-DD
+                return [safeContent, status, date].join(',');
+            });
+
+            const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n'); // BOM for Excel compat
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            
+            // Fix filename: Use simple YYYY-MM-DD format to avoid invalid chars like ':'
+            const dateStr = new Date().toISOString().split('T')[0];
+            const filename = `voice_tasks_${dateStr}.csv`;
+
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            showToast(`CSVをダウンロードしました: ${filename}`);
+        }
+        */
+
+        function copyToClipboard() {
+            // Filter uncompleted tasks
+            const activeTasks = tasks.filter(t => !t.completed);
+            
+            if (activeTasks.length === 0) {
+                showToast('コピーする未完了タスクがありません');
+                return;
+            }
+
+            // Format as Notion-compatible Markdown checklist
+            const text = activeTasks.map(t => `- [ ] ${t.content}`).join('\n');
+
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('未完了タスクをコピーしました (Notionに貼付可)');
+                
+                // Visual Feedback: Change icon to checkmark
+                const originalContent = copyBtn.innerHTML;
+                copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+                
+                setTimeout(() => {
+                    copyBtn.innerHTML = originalContent;
+                }, 2000);
+                
+            }).catch(err => {
+                console.error('Copy failed', err);
+                showToast('コピーに失敗しました');
+            });
+        }
+
+        // --- UI Utils ---
+        function updateUI(recording) {
+            if (recording) {
+                micBtn.classList.add('active');
+                statusText.textContent = '聞いています... (自動継続中)';
+                statusText.style.color = '#e44232';
+            } else {
+                micBtn.classList.remove('active');
+                statusText.textContent = 'タップして開始';
+                statusText.style.color = 'var(--text-secondary)';
+            }
+        }
+
+        function showSettings() {
+            settingsModal.classList.add('open');
+            apiKeyInput.value = geminiApiKey;
+            modelSelect.value = selectedModel || 'gemini-2.5-flash';
+        }
+
+        function hideSettings() {
+            settingsModal.classList.remove('open');
+        }
+
+        function saveAPIKey() {
+            geminiApiKey = apiKeyInput.value.trim();
+            selectedModel = modelSelect.value;
+            localStorage.setItem('geminiApiKey', geminiApiKey);
+            localStorage.setItem('geminiModel', selectedModel);
+            hideSettings();
+            showToast('設定を保存しました');
+        }
+
+        function showToast(msg) {
+            toast.textContent = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        // --- Wake Lock ---
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        async function releaseWakeLock() {
+            if (wakeLock) {
+                await wakeLock.release();
+                wakeLock = null;
+            }
+        }
+
+        document.addEventListener('visibilitychange', async () => {
+            if (wakeLock && document.visibilityState === 'visible') {
+                await requestWakeLock();
+            }
+        });
+
+        // --- Event Listeners ---
+        micBtn.addEventListener('click', () => {
+            if (isRecording) {
+                isRecording = false;
+                recognition.stop();
+                clearTimeout(restartTimer);
+            } else {
+                try { recognition.start(); } catch(e){}
+            }
+        });
+
+        // --- Utils: Custom Confirm ---
+        function showConfirm(message, callback) {
+            confirmMessage.textContent = message;
+            confirmCallback = callback;
+            confirmModal.classList.add('open');
+        }
+        
+        function closeConfirm() {
+            confirmModal.classList.remove('open');
+            confirmCallback = null;
+        }
+
+        confirmOkBtn.addEventListener('click', () => {
+            if (confirmCallback) confirmCallback();
+            closeConfirm();
+        });
+        
+        confirmCancelBtn.addEventListener('click', closeConfirm);
+        
+        // Close modal on outside click
+        confirmModal.addEventListener('click', (e) => {
+            if (e.target === confirmModal) closeConfirm();
+        });
+
+        // --- Event Listeners ---
+        micBtn.addEventListener('click', () => {
+            if (isRecording) {
+                isRecording = false;
+                recognition.stop();
+                clearTimeout(restartTimer);
+            } else {
+                try { recognition.start(); } catch(e){}
+            }
+        });
+
+        if(clearCompletedBtn) {
+            clearCompletedBtn.addEventListener('click', () => {
+                showConfirm('完了したタスクをすべて削除しますか？', () => {
+                    tasks = tasks.filter(t => !t.completed);
+                    saveTasks();
+                    renderTasks();
+                    showToast('完了済みタスクを削除しました');
+                });
+            });
+        }
+        
+        // --- Task Delete with Custom Confirm ---
+        window.deleteTask = function(id) {
+             showConfirm('このタスクを削除しますか？', () => {
+                tasks = tasks.filter(t => t.id !== id);
+                saveTasks();
+                renderTasks();
+            });
+        };
+
+        copyBtn.addEventListener('click', copyToClipboard);
+        settingsBtn.addEventListener('click', showSettings);
+        cancelSettingsBtn.addEventListener('click', hideSettings);
+        saveSettingsBtn.addEventListener('click', saveAPIKey);
+        
+        // Close settings on outside click
+        settingsModal.addEventListener('click', (e) => {
+            if (e.target === settingsModal) hideSettings();
+        });
+
+    </script>
+</body>
+</html>

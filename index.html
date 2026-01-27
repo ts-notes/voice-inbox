@@ -228,6 +228,35 @@
             font-style: italic;
             opacity: 0.9;
             padding: 0 10px;
+            white-space: pre-wrap; /* For multiline batch text */
+        }
+        
+        /* Mode Switcher */
+        .mode-switch-container {
+            display: flex;
+            background: var(--surface-color);
+            padding: 4px;
+            border-radius: 20px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-color);
+        }
+        
+        .mode-btn {
+            padding: 6px 16px;
+            border-radius: 16px;
+            border: none;
+            background: none;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .mode-btn.active {
+            background: var(--text-secondary);
+            color: var(--bg-color);
         }
 
         /* Task List */
@@ -521,7 +550,14 @@
             </div>
         </header>
 
+        </header>
+
         <div class="controls">
+            <div class="mode-switch-container">
+                <button id="mode-realtime" class="mode-btn active">⚡️ Instant</button>
+                <button id="mode-batch" class="mode-btn">🧠 Brain Dump</button>
+            </div>
+
             <button id="mic-btn" class="mic-button" aria-label="録音開始/停止">
                 <svg viewBox="0 0 24 24">
                     <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
@@ -646,6 +682,10 @@
         let transcriptBuffer = '';
         let bufferTimer = null;
         let lastFinalTranscript = ''; // For strict upstream deduplication
+        
+        // Batch Mode State
+        let isBatchMode = false;
+        let batchBuffer = '';
 
         // Initialize
         if (geminiApiKey) {
@@ -720,26 +760,40 @@
 
                     lastFinalTranscript = cleanTranscript;
 
-                    // Reset timer
-                    if (bufferTimer) clearTimeout(bufferTimer);
-                    
-                    // Append to buffer
-                    transcriptBuffer += (transcriptBuffer ? ' ' : '') + cleanTranscript;
-                    
-                    // Update UI to show waiting state
-                    interimDisplay.textContent = transcriptBuffer + ' ...';
-                    interimDisplay.style.opacity = '1';
-                    
-                    // Set timer to process after 1.5s of silence
-                    bufferTimer = setTimeout(() => {
-                        flushBuffer();
-                        lastFinalTranscript = ''; // Reset after flush so simple repeats (legit ones) can work later
-                    }, 1500);
+                    if (isBatchMode) {
+                        // BATCH MODE: Accumulate everything, no timer
+                        batchBuffer += (batchBuffer ? ' ' : '') + cleanTranscript;
+                        transcriptBuffer = ''; // Clear strict buffer unused here
+                        
+                        // Update UI
+                        interimDisplay.textContent = batchBuffer;
+                        interimDisplay.style.opacity = '1';
+                        
+                    } else {
+                        // REALTIME MODE: Aggregation Timer
+                        
+                        // Reset timer
+                        if (bufferTimer) clearTimeout(bufferTimer);
+                        
+                        // Append to buffer
+                        transcriptBuffer += (transcriptBuffer ? ' ' : '') + cleanTranscript;
+                        
+                        // Update UI to show waiting state
+                        interimDisplay.textContent = transcriptBuffer + ' ...';
+                        interimDisplay.style.opacity = '1';
+                        
+                        // Set timer to process after 1.5s of silence
+                        bufferTimer = setTimeout(() => {
+                            flushBuffer();
+                            lastFinalTranscript = ''; 
+                        }, 1500);
+                    }
                 } 
                 
                 if (interimTranscript) {
                     // Show buffer + current interim
-                    interimDisplay.textContent = (transcriptBuffer ? transcriptBuffer + ' ' : '') + interimTranscript;
+                    const currentMain = isBatchMode ? batchBuffer : transcriptBuffer;
+                    interimDisplay.textContent = (currentMain ? currentMain + ' ' : '') + interimTranscript;
                 }
             };
 
@@ -766,6 +820,77 @@
             interimDisplay.textContent = ''; // Clear UI
             
             await processInput(textToProcess);
+        }
+
+        async function processBatchInput() {
+             if (!batchBuffer.trim()) return;
+             
+             const text = batchBuffer.trim();
+             batchBuffer = ''; // Clear
+             interimDisplay.textContent = '';
+             
+             processingIndicator.textContent = 'AIまとめ処理中...';
+             processingIndicator.classList.add('show');
+             
+             try {
+                // Batch Prompt
+                const model = selectedModel || 'gemini-2.5-flash';
+                const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`;
+                
+                const prompt = `
+                Role: Expert Task Manager.
+                Input: Stream-of-consciousness text from a user brain dump.
+                Goal: Split this text into a JSON list of distinct, actionable tasks in Japanese.
+                
+                Input Text:
+                "${text}"
+                
+                Rules:
+                1. Detect distinct tasks (e.g. "Buy milk and call John" -> ["牛乳を買う", "ジョンに電話する"]).
+                2. Fix speech errors and polite forms to simple verb-first Japanese.
+                3. OUTPUT ONLY RAW JSON ARRAY. No markdown, no "json" tags.
+                Example Output: ["タスクA", "タスクB"]
+                `;
+
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                });
+
+                if (!response.ok) throw new Error('Batch AI Error ' + response.status);
+                
+                const data = await response.json();
+                let generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                
+                if (!generatedText) throw new Error('AI応答が空でした');
+                
+                // Clean markdown code blocks if present
+                generatedText = generatedText.replace(/```json/g, '').replace(/```/g, '').trim();
+                
+                let taskList = [];
+                try {
+                    taskList = JSON.parse(generatedText);
+                    if (!Array.isArray(taskList)) throw new Error('Not an array');
+                } catch (e) {
+                     console.error('JSON Parse Error', e);
+                     // Fallback: Split by newlines or just use whole text
+                     taskList = [text]; 
+                     showToast('AI解析失敗: テキストとして保存します');
+                }
+                
+                // Add all tasks
+                taskList.forEach(t => addTask(t, text)); // Attach full original text context to each? Or just the task?
+                                                         // Let's attach full text context for reference.
+                showToast(`${taskList.length}件のタスクを作成しました`);
+
+             } catch (err) {
+                 console.error(err);
+                 showToast('AI一括処理エラー: ' + err.message);
+                 addTask(text, text, true); // Fallback to raw
+             } finally {
+                 processingIndicator.classList.remove('show');
+             }
         }
 
         async function processInput(text) {
@@ -1196,12 +1321,42 @@
             if (e.target === confirmModal) closeConfirm();
         });
 
+        const modeRealtimeBtn = document.getElementById('mode-realtime');
+        const modeBatchBtn = document.getElementById('mode-batch');
+
+        function setMode(batch) {
+            isBatchMode = batch;
+            if (batch) {
+                modeBatchBtn.classList.add('active');
+                modeRealtimeBtn.classList.remove('active');
+                showToast('🧠 まとめモード: 停止ボタンを押すと一括処理します');
+            } else {
+                modeRealtimeBtn.classList.add('active');
+                modeBatchBtn.classList.remove('active');
+                showToast('⚡️ 逐次モード: 話すたびにタスク化します');
+                
+                // Flush any lingering batch buffer if switching back
+                if (batchBuffer) {
+                    processBatchInput();
+                }
+            }
+        }
+
+        modeRealtimeBtn.addEventListener('click', () => setMode(false));
+        modeBatchBtn.addEventListener('click', () => setMode(true));
+
         // --- Event Listeners ---
         micBtn.addEventListener('click', () => {
             if (isRecording) {
                 isRecording = false;
                 recognition.stop();
                 clearTimeout(restartTimer);
+                
+                // If Batch Mode, Trigger Processing NOW
+                if (isBatchMode) {
+                    processBatchInput();
+                }
+                
             } else {
                 try { recognition.start(); } catch(e){}
             }

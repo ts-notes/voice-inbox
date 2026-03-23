@@ -6,12 +6,12 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="Voice Inbox V2">
+    <meta name="apple-mobile-web-app-title" content="Voice Inbox">
     <meta name="theme-color" content="#f6f0e8">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/v2-icon-192.png">
     <link rel="apple-touch-icon" href="icons/v2-icon-180.png">
     <link rel="manifest" href="manifest-v2.json">
-    <title>Voice Inbox V2</title>
+    <title>Voice Inbox</title>
     <style>
         :root {
             --bg: #f6f0e8;
@@ -42,10 +42,22 @@
             min-height: 100vh;
             color: var(--text);
             font-family: "Avenir Next", "Hiragino Sans", "Yu Gothic", sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
             background:
                 radial-gradient(circle at top left, rgba(255, 255, 255, 0.9), transparent 35%),
                 radial-gradient(circle at top right, rgba(255, 214, 186, 0.85), transparent 28%),
                 linear-gradient(180deg, var(--bg) 0%, #f1ebe1 100%);
+        }
+
+        input,
+        textarea,
+        select,
+        option {
+            user-select: text;
+            -webkit-user-select: text;
+            -webkit-touch-callout: default;
         }
 
         .app-shell {
@@ -64,6 +76,20 @@
         }
 
         .brand {
+            align-items: center;
+            display: flex;
+            gap: 12px;
+        }
+
+        .brand-icon {
+            width: 58px;
+            height: 58px;
+            border-radius: 18px;
+            box-shadow: var(--shadow);
+            flex-shrink: 0;
+        }
+
+        .brand-copy {
             display: flex;
             flex-direction: column;
             gap: 4px;
@@ -95,6 +121,10 @@
             display: flex;
             gap: 10px;
             flex-shrink: 0;
+        }
+
+        a.icon-btn {
+            text-decoration: none;
         }
 
         .ghost-btn,
@@ -218,14 +248,30 @@
         .status-pill {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
-            border-radius: 999px;
+            gap: 10px;
+            padding: 10px 14px;
+            border-radius: 18px;
             background: rgba(255, 255, 255, 0.88);
             border: 1px solid rgba(72, 56, 43, 0.08);
             color: var(--muted);
             font-size: 0.82rem;
             font-weight: 700;
+            flex-shrink: 0;
+            min-width: 108px;
+        }
+
+        .status-copy {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            line-height: 1.05;
+        }
+
+        .status-label {
+            font-size: 0.65rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            opacity: 0.78;
         }
 
         .status-dot {
@@ -668,10 +714,19 @@
                 flex-direction: column;
             }
 
+            .brand {
+                align-items: flex-start;
+            }
+
             .topbar-actions {
                 width: 100%;
                 justify-content: flex-end;
                 flex-wrap: wrap;
+            }
+
+            .panel-header {
+                align-items: flex-start;
+                flex-direction: column;
             }
 
             .recorder-footer {
@@ -715,35 +770,29 @@
     <main class="app-shell">
         <header class="topbar">
             <div class="brand">
-                <div class="eyebrow">Voice Inbox V2</div>
-                <h1>録音して、止めたら、まとめて整理</h1>
-                <p class="subtitle">録音中はAPIを叩かず、停止後にGeminiへ1回だけ送ってタスク化します。</p>
+                <img class="brand-icon" src="icons/v2-icon-192.png" alt="">
+                <div class="brand-copy">
+                    <div class="eyebrow">Voice To Task</div>
+                    <h1>Voice Inbox</h1>
+                </div>
             </div>
             <div class="topbar-actions">
                 <button id="install-btn" class="install-btn" type="button" hidden>アプリを追加</button>
+                <a class="icon-btn" href="guide-v2.html" aria-label="使い方" title="使い方">?</a>
                 <button id="new-session-btn" class="icon-btn" type="button" aria-label="結果をリセット" title="結果をリセット">↺</button>
                 <button id="settings-btn" class="icon-btn" type="button" aria-label="設定" title="設定">⚙</button>
             </div>
         </header>
 
-        <section class="hero-card">
-            <p class="subtitle">あなたの用途に合わせて、リアルタイム文字表示はやめています。重複表示や連続API呼び出しを避けて、最後に一括で「やること」に変えます。</p>
-            <div class="hero-meta">
-                <span class="chip">録音中はAPI通信なし</span>
-                <span class="chip">停止後にGeminiへ1回だけ送信</span>
-                <span class="chip">ブラウザ録音のため1回6分まで</span>
-            </div>
-        </section>
-
         <section class="panel recorder-panel">
             <div class="panel-header">
-                <div>
-                    <h2 class="panel-title">録音</h2>
-                    <p class="panel-note">ブレインダンプでも、その場の思いつきでも大丈夫です。止めたあとに一括で整理します。</p>
-                </div>
-                <div id="status-pill" class="status-pill">
+                <h2 class="panel-title">録音</h2>
+                <div id="status-pill" class="status-pill" aria-live="polite">
                     <span class="status-dot"></span>
-                    <span id="status-text">録音待機中</span>
+                    <span class="status-copy">
+                        <span class="status-label">状態</span>
+                        <span id="status-text">待機中</span>
+                    </span>
                 </div>
             </div>
 
@@ -1124,7 +1173,7 @@
                 recordBtn.textContent = '停止';
                 recordBtn.className = 'primary-btn recording';
                 recordWrap.classList.add('recording');
-                recorderHelp.textContent = '録音中はGeminiを呼びません。止めたあとに、まとめて1回だけ送信します。';
+                recorderHelp.textContent = '録音中です。終わったら停止してください。';
                 return;
             }
 
@@ -1132,10 +1181,10 @@
             recordWrap.classList.remove('recording');
 
             if (phase === 'processing') {
-                statusText.textContent = message || 'Geminiで整理中';
+                statusText.textContent = message || '整理中';
                 recordBtn.textContent = '整理中...';
                 recordBtn.className = 'primary-btn processing';
-                recorderHelp.textContent = '音声をGeminiへ送って、原文とタスクリストに整理しています。';
+                recorderHelp.textContent = 'Geminiで要約とタスク化をしています。';
                 return;
             }
 
@@ -1143,23 +1192,23 @@
                 statusText.textContent = message || 'エラー';
                 recordBtn.textContent = '録音開始';
                 recordBtn.className = 'primary-btn';
-                recorderHelp.textContent = 'エラーが出たときは、APIキー・モデル・録音時間を見直してください。';
+                recorderHelp.textContent = 'うまくいかない時は、使い方ページを確認してください。';
                 return;
             }
 
             if (phase === 'ready') {
-                statusText.textContent = message || '整理完了';
+                statusText.textContent = message || '完了';
                 recordBtn.textContent = '再録音';
                 recordBtn.className = 'primary-btn';
                 recorderHelp.textContent = '前回の結果は下に残したまま、次の録音を続けられます。';
                 return;
             }
 
-            statusText.textContent = message || '録音待機中';
+            statusText.textContent = message || '待機中';
             recordBtn.textContent = '録音開始';
             recordBtn.className = 'primary-btn';
             recorderHelp.textContent = state.apiKey
-                ? '準備OKです。思いついたことを話して、止めたら一括で整理します。'
+                ? '準備OKです。話して、止めると整理します。'
                 : '最初に設定からGemini APIキーを入れてください。';
         }
 

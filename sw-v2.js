@@ -1,6 +1,7 @@
 const CACHE_NAME = 'voice-inbox-v2-shell-20260323-1';
 const APP_SHELL = [
     './v2.html',
+    './guide-v2.html',
     './manifest-v2.json',
     './icons/v2-icon-180.png',
     './icons/v2-icon-192.png',

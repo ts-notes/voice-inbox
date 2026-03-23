@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#f6f0e8">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/v2-icon-192.png">
+    <title>Voice Inbox Guide</title>
+    <style>
+        :root {
+            --bg: #f6f0e8;
+            --card: rgba(255, 255, 255, 0.84);
+            --line: rgba(72, 56, 43, 0.12);
+            --text: #2f241d;
+            --muted: #6f5e52;
+            --accent: #d95f3f;
+            --accent-soft: rgba(217, 95, 63, 0.12);
+            --shadow: 0 18px 40px rgba(102, 68, 40, 0.12);
+            --radius-xl: 28px;
+            --radius-lg: 20px;
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            color: var(--text);
+            font-family: "Avenir Next", "Hiragino Sans", "Yu Gothic", sans-serif;
+            background:
+                radial-gradient(circle at top left, rgba(255, 255, 255, 0.9), transparent 35%),
+                radial-gradient(circle at top right, rgba(255, 214, 186, 0.85), transparent 28%),
+                linear-gradient(180deg, var(--bg) 0%, #f1ebe1 100%);
+        }
+
+        .shell {
+            width: 100%;
+            max-width: 760px;
+            margin: 0 auto;
+            padding: 20px 16px 40px;
+        }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand img {
+            width: 56px;
+            height: 56px;
+            border-radius: 18px;
+            box-shadow: var(--shadow);
+        }
+
+        .eyebrow {
+            margin: 0 0 4px;
+            color: var(--accent);
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: clamp(1.65rem, 5vw, 2.2rem);
+            line-height: 1.05;
+            letter-spacing: -0.03em;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 46px;
+            padding: 0 16px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.88);
+            border: 1px solid rgba(72, 56, 43, 0.08);
+            box-shadow: var(--shadow);
+            color: var(--text);
+            text-decoration: none;
+            font-weight: 700;
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(16px);
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+
+        .lead {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.7;
+        }
+
+        h2 {
+            margin: 0 0 10px;
+            font-size: 1.08rem;
+        }
+
+        ul {
+            margin: 0;
+            padding-left: 1.2rem;
+            line-height: 1.8;
+        }
+
+        li + li {
+            margin-top: 6px;
+        }
+
+        .note {
+            background: var(--accent-soft);
+            border-radius: var(--radius-lg);
+            padding: 14px 16px;
+            color: var(--muted);
+            line-height: 1.65;
+        }
+
+        code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 0.95em;
+        }
+
+        @media (max-width: 640px) {
+            .shell {
+                padding: 14px 14px 36px;
+            }
+
+            .topbar {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="shell">
+        <header class="topbar">
+            <div class="brand">
+                <img src="icons/v2-icon-192.png" alt="">
+                <div>
+                    <p class="eyebrow">Guide</p>
+                    <h1>Voice Inbox</h1>
+                </div>
+            </div>
+            <a class="back-link" href="v2.html">アプリに戻る</a>
+        </header>
+
+        <section class="card">
+            <p class="lead">Voice Inbox は、思いついたことを話して、止めたあとに Gemini でまとめて要約とタスク化をするアプリです。リアルタイム文字起こしはせず、最後に一括で整理する形にしています。</p>
+        </section>
+
+        <section class="card">
+            <h2>使い方</h2>
+            <ul>
+                <li>最初に設定から Gemini API キーを入れます。</li>
+                <li>録音開始を押して、考えていることをそのまま話します。</li>
+                <li>話し終えたら停止します。</li>
+                <li>整理された要約とタスクを確認します。</li>
+                <li>未完了だけをコピーして、Notion や Keep に貼り付けられます。</li>
+            </ul>
+        </section>
+
+        <section class="card">
+            <h2>このアプリの動き方</h2>
+            <ul>
+                <li>録音中は API 通信をしません。</li>
+                <li>停止したあとに、音声を Gemini へ 1 回だけ送ります。</li>
+                <li>返ってきた結果から、要約、原文、タスクを表示します。</li>
+                <li>タスクや最後の結果、API キー名はブラウザ内に保存します。</li>
+                <li>失敗した録音は保管され、あとから再送信できます。</li>
+            </ul>
+        </section>
+
+        <section class="card">
+            <h2>注意点</h2>
+            <ul>
+                <li>Gemini へ送るため、ネット接続は必要です。</li>
+                <li>1 回の録音は最大で約 6 分です。</li>
+                <li>API キーはこのブラウザ内に保存されます。</li>
+                <li>スマホで使うときは、Chrome から <code>v2.html</code> を開いてインストールするのがおすすめです。</li>
+            </ul>
+        </section>
+
+        <section class="note">
+            このガイドはアプリ内の説明を減らすための別ページです。普段はアプリ本体だけ使い、困ったときだけここを見れば大丈夫です。
+        </section>
+    </main>
+</body>
+</html>

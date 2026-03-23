@@ -1,8 +1,8 @@
 {
     "id": "./v2.html",
-    "name": "Voice Inbox V2",
-    "short_name": "VoiceInbox",
-    "description": "録音して止めたあとに、Geminiでまとめて要約とタスク化をする個人用Voice Inboxです。",
+    "name": "Voice Inbox",
+    "short_name": "Voice Inbox",
+    "description": "録音して止めたあとに、Geminiでまとめて要約とタスク化をする Voice Inbox です。",
     "lang": "ja",
     "start_url": "./v2.html?source=pwa",
     "scope": "./",

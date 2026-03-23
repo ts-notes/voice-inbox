@@ -650,7 +650,8 @@
         }
 
         .field input,
-        .field select {
+        .field select,
+        .field textarea {
             width: 100%;
             min-height: 48px;
             border-radius: 14px;
@@ -659,6 +660,12 @@
             background: #ffffff;
             color: var(--text);
             font: inherit;
+        }
+
+        .field textarea {
+            min-height: 118px;
+            resize: vertical;
+            line-height: 1.55;
         }
 
         .field-hint {
@@ -677,6 +684,39 @@
             justify-content: flex-end;
             gap: 10px;
             margin-top: 22px;
+        }
+
+        .sync-box {
+            margin-top: 10px;
+            padding: 14px;
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.76);
+            border: 1px solid rgba(72, 56, 43, 0.08);
+        }
+
+        .sync-box-title {
+            margin: 0 0 8px;
+            font-size: 0.96rem;
+            font-weight: 700;
+        }
+
+        .sync-status {
+            margin: 0 0 12px;
+            color: var(--muted);
+            font-size: 0.86rem;
+            line-height: 1.55;
+            white-space: pre-wrap;
+        }
+
+        .sync-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .sync-actions .soft-btn,
+        .sync-actions .ghost-btn {
+            min-width: 120px;
         }
 
         .toast {
@@ -880,7 +920,7 @@
     <div id="settings-modal" class="modal-overlay" aria-hidden="true">
         <div class="modal">
             <h2>設定</h2>
-            <p class="modal-copy">Gemini APIキーはブラウザ内だけに保存します。今のv2は録音後に1回だけGeminiへ送る設計です。</p>
+            <p class="modal-copy">Gemini APIキーは各端末のブラウザ内だけに保存します。Firebase 同期を有効にすると、タスクと直近結果だけを他端末と同期できます。</p>
             <div class="field">
                 <label for="profile-select">保存済みAPIキー</label>
                 <select id="profile-select">
@@ -907,6 +947,22 @@
                 </select>
                 <div class="field-hint">まずは `gemini-2.5-flash` をおすすめします。もっと軽くしたい時だけ Lite に切り替えてください。</div>
             </div>
+            <div class="field">
+                <label for="firebase-config-input">Firebase Web 設定</label>
+                <textarea id="firebase-config-input" placeholder="const firebaseConfig = { apiKey: '...', authDomain: '...', projectId: '...', appId: '...' }"></textarea>
+                <div class="field-hint">Firebase コンソールで Web アプリを作成すると表示される設定を、そのまま貼り付けられます。</div>
+            </div>
+            <div class="sync-box">
+                <p class="sync-box-title">タスク同期</p>
+                <p id="sync-status-text" class="sync-status">Firebase 未設定</p>
+                <div class="sync-actions">
+                    <button id="sync-login-btn" class="soft-btn" type="button">Google でログイン</button>
+                    <button id="sync-logout-btn" class="ghost-btn" type="button">ログアウト</button>
+                </div>
+                <div class="field-hint">
+                    同期の設定方法は <a href="guide-v2.html#sync" target="_blank" rel="noopener noreferrer">使い方ページ</a> にまとめています。
+                </div>
+            </div>
             <div class="modal-actions">
                 <button id="delete-profile-btn" class="ghost-btn" type="button">選択キーを削除</button>
                 <button id="close-settings-btn" class="ghost-btn" type="button">閉じる</button>
@@ -917,7 +973,25 @@
 
     <div id="toast" class="toast" aria-live="polite"></div>
 
-    <script>
+    <script type="module">
+        import { initializeApp, deleteApp } from 'https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js';
+        import {
+            getAuth,
+            GoogleAuthProvider,
+            browserLocalPersistence,
+            setPersistence,
+            signInWithRedirect,
+            getRedirectResult,
+            onAuthStateChanged,
+            signOut
+        } from 'https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js';
+        import {
+            getFirestore,
+            doc,
+            setDoc,
+            onSnapshot
+        } from 'https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js';
+
         const STORAGE_KEY = 'voiceInboxV2State';
         const DB_NAME = 'voiceInboxV2Db';
         const DB_VERSION = 1;
@@ -959,6 +1033,10 @@
         const profileNameInput = document.getElementById('profile-name-input');
         const apiKeyInput = document.getElementById('api-key-input');
         const modelSelect = document.getElementById('model-select');
+        const firebaseConfigInput = document.getElementById('firebase-config-input');
+        const syncStatusText = document.getElementById('sync-status-text');
+        const syncLoginBtn = document.getElementById('sync-login-btn');
+        const syncLogoutBtn = document.getElementById('sync-logout-btn');
         const saveSettingsBtn = document.getElementById('save-settings-btn');
         const closeSettingsBtn = document.getElementById('close-settings-btn');
         const deleteProfileBtn = document.getElementById('delete-profile-btn');
@@ -974,7 +1052,11 @@
             tasks: [],
             lastSession: null,
             recordingStartedAt: 0,
-            pendingRecording: null
+            pendingRecording: null,
+            firebaseConfigSource: '',
+            lastChangedAt: '',
+            syncUser: null,
+            syncStatus: 'Firebase 未設定'
         };
 
         let mediaStream = null;
@@ -991,6 +1073,16 @@
         let toastTimer = null;
         let dbPromise = null;
         let deferredInstallPrompt = null;
+        let firebaseApp = null;
+        let firebaseAuth = null;
+        let firebaseDb = null;
+        let firebaseConfigKey = '';
+        let authUnsubscribe = null;
+        let cloudUnsubscribe = null;
+        let googleProvider = null;
+        let isApplyingRemoteState = false;
+        let lastUploadedStateAt = '';
+        let initialCloudSnapshotHandled = false;
 
         loadState();
         migrateLegacyApiKey();
@@ -999,6 +1091,11 @@
         drawWaveform();
         hydratePendingRecording();
         setupPwa();
+        ensureFirebaseReady().catch(error => {
+            console.error('Firebase bootstrap failed', error);
+            state.syncStatus = 'Firebase 初期化エラー';
+            renderSyncStatus();
+        });
 
         function loadState() {
             try {
@@ -1012,6 +1109,8 @@
                 state.model = parsed.model || 'gemini-2.5-flash';
                 state.tasks = Array.isArray(parsed.tasks) ? parsed.tasks : [];
                 state.lastSession = parsed.lastSession || null;
+                state.firebaseConfigSource = parsed.firebaseConfigSource || '';
+                state.lastChangedAt = parsed.lastChangedAt || '';
             } catch (error) {
                 console.error('Failed to load v2 state', error);
             }
@@ -1046,8 +1145,16 @@
                 apiProfiles: state.apiProfiles,
                 model: state.model,
                 tasks: state.tasks,
-                lastSession: state.lastSession
+                lastSession: state.lastSession,
+                firebaseConfigSource: state.firebaseConfigSource,
+                lastChangedAt: state.lastChangedAt
             }));
+        }
+
+        function commitLocalContentChange() {
+            state.lastChangedAt = new Date().toISOString();
+            saveState();
+            queueCloudSync();
         }
 
         function syncSettingsFields() {
@@ -1057,6 +1164,65 @@
             profileNameInput.value = activeProfile ? activeProfile.name : '';
             apiKeyInput.value = state.apiKey;
             modelSelect.value = state.model;
+            firebaseConfigInput.value = state.firebaseConfigSource || '';
+            renderSyncStatus();
+        }
+
+        function renderSyncStatus() {
+            syncStatusText.textContent = state.syncStatus;
+            syncLoginBtn.disabled = !getFirebaseConfigFromState() || !!state.syncUser;
+            syncLogoutBtn.disabled = !state.syncUser;
+        }
+
+        function normalizeFirebaseConfig(rawConfig) {
+            if (!rawConfig || typeof rawConfig !== 'object') return null;
+
+            const config = {
+                apiKey: String(rawConfig.apiKey || '').trim(),
+                authDomain: String(rawConfig.authDomain || '').trim(),
+                projectId: String(rawConfig.projectId || '').trim(),
+                storageBucket: String(rawConfig.storageBucket || '').trim(),
+                messagingSenderId: String(rawConfig.messagingSenderId || '').trim(),
+                appId: String(rawConfig.appId || '').trim()
+            };
+
+            if (!config.apiKey || !config.authDomain || !config.projectId || !config.appId) {
+                return null;
+            }
+
+            return config;
+        }
+
+        function parseFirebaseConfigSource(source) {
+            const trimmed = (source || '').trim();
+            if (!trimmed) return null;
+
+            let candidate = trimmed
+                .replace(/^const\s+firebaseConfig\s*=\s*/i, '')
+                .replace(/^window\.firebaseConfig\s*=\s*/i, '')
+                .replace(/^export\s+default\s+/i, '')
+                .replace(/;\s*$/g, '')
+                .trim();
+
+            try {
+                const parsed = JSON.parse(candidate);
+                return normalizeFirebaseConfig(parsed);
+            } catch (jsonError) {}
+
+            try {
+                const parsed = Function(`"use strict"; return (${candidate});`)();
+                return normalizeFirebaseConfig(parsed);
+            } catch (evalError) {
+                throw new Error('Firebase設定の形式を読み取れませんでした');
+            }
+        }
+
+        function getFirebaseConfigFromState() {
+            try {
+                return parseFirebaseConfigSource(state.firebaseConfigSource);
+            } catch (error) {
+                return null;
+            }
         }
 
         function renderProfileOptions() {
@@ -1102,10 +1268,20 @@
         function upsertProfileFromInputs() {
             const profileName = collapseWhitespace(profileNameInput.value) || `Key ${state.apiProfiles.length + 1}`;
             const apiKey = apiKeyInput.value.trim();
+            const firebaseConfigSource = firebaseConfigInput.value.trim();
 
             if (!apiKey) {
                 showToast('APIキーを入力してください');
                 return false;
+            }
+
+            if (firebaseConfigSource) {
+                try {
+                    parseFirebaseConfigSource(firebaseConfigSource);
+                } catch (error) {
+                    showToast(error.message || 'Firebase設定を読み取れませんでした');
+                    return false;
+                }
             }
 
             const existingId = profileSelect.value || state.activeProfileId;
@@ -1131,6 +1307,7 @@
 
             state.apiKey = apiKey;
             state.model = modelSelect.value;
+            state.firebaseConfigSource = firebaseConfigSource;
             saveState();
             syncSettingsFields();
             renderAll();
@@ -1219,6 +1396,7 @@
             renderPendingRecording();
             renderButtons();
             renderTimer();
+            renderSyncStatus();
             setPhase(state.phase === 'recording' || state.phase === 'processing' ? state.phase : (state.lastSession ? 'ready' : 'idle'));
         }
 
@@ -1259,7 +1437,7 @@
                 toggle.setAttribute('aria-label', task.completed ? '未完了に戻す' : '完了にする');
                 toggle.addEventListener('click', () => {
                     task.completed = !task.completed;
-                    saveState();
+                    commitLocalContentChange();
                     renderTasks();
                     renderButtons();
                 });
@@ -1296,7 +1474,7 @@
                     }
 
                     task.title = cleaned;
-                    saveState();
+                    commitLocalContentChange();
                     renderTasks();
                     showToast('タスクを更新しました');
                 });
@@ -1309,7 +1487,7 @@
                 deleteBtn.addEventListener('click', () => {
                     if (!confirm('このタスクを削除しますか？')) return;
                     state.tasks = state.tasks.filter(entry => entry.id !== task.id);
-                    saveState();
+                    commitLocalContentChange();
                     renderTasks();
                     renderButtons();
                 });
@@ -1457,6 +1635,324 @@
             } catch (error) {
                 console.error('Install prompt failed', error);
                 showToast('インストールを開始できませんでした');
+            }
+        }
+
+        function getCloudDocRef(uid) {
+            if (!firebaseDb) return null;
+            return doc(firebaseDb, 'users', uid, 'appState', 'voiceInboxV2');
+        }
+
+        function hasLocalContent() {
+            return state.tasks.length > 0 || !!state.lastSession;
+        }
+
+        function sanitizeTask(task) {
+            if (!task || typeof task !== 'object') return null;
+            const title = collapseWhitespace(task.title);
+            const source = collapseWhitespace(task.source || '');
+            if (!title) return null;
+
+            return {
+                id: String(task.id || makeId('task')),
+                title,
+                source,
+                completed: Boolean(task.completed),
+                createdAt: task.createdAt || new Date().toISOString(),
+                sessionId: task.sessionId || ''
+            };
+        }
+
+        function sanitizeSession(session) {
+            if (!session || typeof session !== 'object') return null;
+            const transcript = typeof session.transcript === 'string' ? session.transcript : '';
+            const summary = collapseWhitespace(session.summary || '');
+            if (!summary && !transcript) return null;
+
+            return {
+                id: String(session.id || makeId('session')),
+                summary: summary || '要約はありません。',
+                transcript,
+                durationMs: Number(session.durationMs || 0),
+                createdAt: session.createdAt || new Date().toISOString(),
+                model: String(session.model || state.model)
+            };
+        }
+
+        function getComparableTime(value) {
+            const time = value ? new Date(value).getTime() : 0;
+            return Number.isFinite(time) ? time : 0;
+        }
+
+        function mergeTaskLists(remoteTasks, localTasks) {
+            const map = new Map();
+
+            function upsert(task) {
+                const safeTask = sanitizeTask(task);
+                if (!safeTask) return;
+                const signature = `${safeTask.id}::${normalizeText(safeTask.title)}::${normalizeText(safeTask.source)}`;
+                const existing = map.get(signature);
+                if (!existing) {
+                    map.set(signature, safeTask);
+                    return;
+                }
+
+                const existingTime = getComparableTime(existing.createdAt);
+                const nextTime = getComparableTime(safeTask.createdAt);
+                const preferred = nextTime >= existingTime ? safeTask : existing;
+                preferred.completed = existing.completed || safeTask.completed;
+                map.set(signature, preferred);
+            }
+
+            remoteTasks.forEach(upsert);
+            localTasks.forEach(upsert);
+
+            return Array.from(map.values()).sort((a, b) => getComparableTime(b.createdAt) - getComparableTime(a.createdAt));
+        }
+
+        function mergeAppState(remotePayload) {
+            const remoteTasks = Array.isArray(remotePayload?.tasks) ? remotePayload.tasks : [];
+            const remoteSession = sanitizeSession(remotePayload?.lastSession);
+            const localSession = sanitizeSession(state.lastSession);
+            const mergedTasks = mergeTaskLists(remoteTasks, state.tasks);
+
+            let mergedSession = remoteSession;
+            if (localSession && (!remoteSession || getComparableTime(localSession.createdAt) > getComparableTime(remoteSession.createdAt))) {
+                mergedSession = localSession;
+            }
+
+            return {
+                tasks: mergedTasks,
+                lastSession: mergedSession,
+                updatedAt: getComparableTime(remotePayload?.updatedAt) > getComparableTime(state.lastChangedAt)
+                    ? remotePayload.updatedAt
+                    : state.lastChangedAt
+            };
+        }
+
+        function serializeSyncPayload(payload) {
+            return JSON.stringify({
+                tasks: Array.isArray(payload?.tasks) ? payload.tasks.map(sanitizeTask).filter(Boolean) : [],
+                lastSession: sanitizeSession(payload?.lastSession)
+            });
+        }
+
+        function applyCloudState(payload) {
+            isApplyingRemoteState = true;
+            try {
+                state.tasks = Array.isArray(payload?.tasks) ? payload.tasks.map(sanitizeTask).filter(Boolean) : [];
+                state.lastSession = sanitizeSession(payload?.lastSession);
+                state.lastChangedAt = payload?.updatedAt || state.lastChangedAt || new Date().toISOString();
+                saveState();
+                renderAll();
+            } finally {
+                isApplyingRemoteState = false;
+            }
+        }
+
+        function queueCloudSync() {
+            if (isApplyingRemoteState) return;
+            if (!firebaseDb || !state.syncUser) return;
+            syncStateToCloud().catch(error => {
+                console.error('Cloud sync failed', error);
+                state.syncStatus = '同期エラー\nFirebase 設定や通信状態を確認してください';
+                renderSyncStatus();
+            });
+        }
+
+        async function syncStateToCloud() {
+            if (!firebaseDb || !state.syncUser) return;
+            const docRef = getCloudDocRef(state.syncUser.uid);
+            if (!docRef) return;
+
+            const payload = {
+                tasks: state.tasks.map(task => sanitizeTask(task)).filter(Boolean),
+                lastSession: sanitizeSession(state.lastSession),
+                updatedAt: state.lastChangedAt || new Date().toISOString()
+            };
+
+            await setDoc(docRef, payload, { merge: true });
+            lastUploadedStateAt = payload.updatedAt;
+            state.syncStatus = `同期中\n${state.syncUser.email || state.syncUser.uid}`;
+            renderSyncStatus();
+        }
+
+        async function stopCloudListener() {
+            if (cloudUnsubscribe) {
+                cloudUnsubscribe();
+                cloudUnsubscribe = null;
+            }
+            initialCloudSnapshotHandled = false;
+        }
+
+        async function startCloudListener(user) {
+            await stopCloudListener();
+            const docRef = getCloudDocRef(user.uid);
+            if (!docRef) return;
+
+            state.syncStatus = `同期準備中\n${user.email || user.uid}`;
+            renderSyncStatus();
+
+            cloudUnsubscribe = onSnapshot(docRef, async snapshot => {
+                const remotePayload = snapshot.exists() ? snapshot.data() : null;
+
+                if (!initialCloudSnapshotHandled) {
+                    initialCloudSnapshotHandled = true;
+
+                    if (!remotePayload) {
+                        state.syncStatus = `同期オン\n${user.email || user.uid}`;
+                        renderSyncStatus();
+                        if (hasLocalContent()) {
+                            await syncStateToCloud();
+                        }
+                        return;
+                    }
+
+                    const merged = mergeAppState(remotePayload);
+                    const shouldUploadMerged = serializeSyncPayload(merged) !== serializeSyncPayload(remotePayload)
+                        || getComparableTime(state.lastChangedAt) > getComparableTime(remotePayload.updatedAt);
+
+                    applyCloudState({
+                        tasks: merged.tasks,
+                        lastSession: merged.lastSession,
+                        updatedAt: merged.updatedAt || remotePayload.updatedAt || new Date().toISOString()
+                    });
+
+                    state.syncStatus = `同期オン\n${user.email || user.uid}`;
+                    renderSyncStatus();
+
+                    if (shouldUploadMerged) {
+                        commitLocalContentChange();
+                    }
+                    return;
+                }
+
+                if (!remotePayload) return;
+                if (remotePayload.updatedAt && remotePayload.updatedAt === lastUploadedStateAt) {
+                    state.syncStatus = `同期オン\n${user.email || user.uid}`;
+                    renderSyncStatus();
+                    return;
+                }
+
+                applyCloudState({
+                    tasks: remotePayload.tasks,
+                    lastSession: remotePayload.lastSession,
+                    updatedAt: remotePayload.updatedAt || new Date().toISOString()
+                });
+                state.syncStatus = `同期オン\n${user.email || user.uid}`;
+                renderSyncStatus();
+            }, error => {
+                console.error('Cloud listener failed', error);
+                state.syncStatus = '同期エラー\nFirestore ルールや通信状態を確認してください';
+                renderSyncStatus();
+            });
+        }
+
+        async function teardownFirebase() {
+            if (authUnsubscribe) {
+                authUnsubscribe();
+                authUnsubscribe = null;
+            }
+
+            await stopCloudListener();
+
+            state.syncUser = null;
+            firebaseAuth = null;
+            firebaseDb = null;
+            googleProvider = null;
+            firebaseConfigKey = '';
+
+            if (firebaseApp) {
+                try {
+                    await deleteApp(firebaseApp);
+                } catch (error) {
+                    console.error('Firebase app delete failed', error);
+                }
+            }
+
+            firebaseApp = null;
+        }
+
+        async function ensureFirebaseReady() {
+            const config = getFirebaseConfigFromState();
+            if (!config) {
+                await teardownFirebase();
+                state.syncStatus = 'Firebase 未設定';
+                renderSyncStatus();
+                return false;
+            }
+
+            const key = JSON.stringify(config);
+            if (firebaseApp && firebaseConfigKey === key && firebaseAuth && firebaseDb) {
+                renderSyncStatus();
+                return true;
+            }
+
+            await teardownFirebase();
+
+            firebaseApp = initializeApp(config, 'voiceInboxV2');
+            firebaseConfigKey = key;
+            firebaseAuth = getAuth(firebaseApp);
+            firebaseDb = getFirestore(firebaseApp);
+            googleProvider = new GoogleAuthProvider();
+
+            await setPersistence(firebaseAuth, browserLocalPersistence);
+
+            try {
+                await getRedirectResult(firebaseAuth);
+            } catch (error) {
+                console.error('Firebase redirect result failed', error);
+                showToast('Googleログインの結果を受け取れませんでした');
+            }
+
+            authUnsubscribe = onAuthStateChanged(firebaseAuth, async user => {
+                state.syncUser = user
+                    ? {
+                        uid: user.uid,
+                        email: user.email || '',
+                        name: user.displayName || ''
+                    }
+                    : null;
+
+                if (user) {
+                    await startCloudListener(user);
+                } else {
+                    await stopCloudListener();
+                    state.syncStatus = '未ログイン\nGoogle でログインすると同期できます';
+                    renderSyncStatus();
+                }
+            });
+
+            state.syncStatus = '未ログイン\nGoogle でログインすると同期できます';
+            renderSyncStatus();
+            return true;
+        }
+
+        async function signInToSync() {
+            if (!(await ensureFirebaseReady())) {
+                showToast('先に Firebase 設定を保存してください');
+                return;
+            }
+
+            try {
+                await signInWithRedirect(firebaseAuth, googleProvider);
+            } catch (error) {
+                console.error('Firebase sign-in failed', error);
+                showToast('Googleログインを開始できませんでした');
+            }
+        }
+
+        async function signOutFromSync() {
+            if (!firebaseAuth) return;
+
+            try {
+                await signOut(firebaseAuth);
+                state.syncStatus = 'ログアウトしました';
+                renderSyncStatus();
+                showToast('同期アカウントからログアウトしました');
+            } catch (error) {
+                console.error('Firebase sign-out failed', error);
+                showToast('ログアウトできませんでした');
             }
         }
 
@@ -2022,7 +2518,7 @@
                 model: state.model
             };
 
-            saveState();
+            commitLocalContentChange();
             renderAll();
         }
 
@@ -2075,7 +2571,7 @@
             if (!confirm('完了したタスクを削除しますか？')) return;
 
             state.tasks = state.tasks.filter(task => !task.completed);
-            saveState();
+            commitLocalContentChange();
             renderTasks();
             renderButtons();
             showToast('完了分を削除しました');
@@ -2147,7 +2643,7 @@
 
             state.tasks = [];
             state.lastSession = null;
-            saveState();
+            commitLocalContentChange();
             renderAll();
             showToast('結果をリセットしました');
         });
@@ -2158,12 +2654,21 @@
         profileSelect.addEventListener('change', event => {
             handleProfileSelection(event.target.value);
         });
-        saveSettingsBtn.addEventListener('click', () => {
+        saveSettingsBtn.addEventListener('click', async () => {
             if (!upsertProfileFromInputs()) return;
+            try {
+                await ensureFirebaseReady();
+            } catch (error) {
+                console.error('Firebase setup failed after save', error);
+                showToast('Firebase の初期化に失敗しました');
+                return;
+            }
             closeSettings();
             showToast('設定を保存しました');
         });
         deleteProfileBtn.addEventListener('click', deleteSelectedProfile);
+        syncLoginBtn.addEventListener('click', signInToSync);
+        syncLogoutBtn.addEventListener('click', signOutFromSync);
 
         settingsModal.addEventListener('click', event => {
             if (event.target === settingsModal) {

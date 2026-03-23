@@ -200,6 +200,52 @@
             </ul>
         </section>
 
+        <section id="sync" class="card">
+            <h2>Firebase 同期の設定</h2>
+            <ul>
+                <li>個人利用なら、まずは Firebase の Spark プラン前提で始めれば大丈夫です。</li>
+                <li>Firebase コンソールでプロジェクトを作成します。</li>
+                <li>Authentication で Google ログインを有効にします。</li>
+                <li>Firestore Database を作成します。</li>
+                <li>Authentication の許可ドメインに <code>ts-notes.github.io</code> を追加します。</li>
+                <li>Firebase の Web アプリを追加して、表示された <code>firebaseConfig</code> をコピーします。</li>
+                <li>Voice Inbox の設定画面に、その設定を貼り付けて保存します。</li>
+                <li>設定画面の <code>Google でログイン</code> を押すと、タスクと直近結果の同期が始まります。</li>
+            </ul>
+        </section>
+
+        <section class="card">
+            <h2>同期されるもの</h2>
+            <ul>
+                <li>タスクInboxの内容</li>
+                <li>直近の要約</li>
+                <li>直近の原文</li>
+            </ul>
+        </section>
+
+        <section class="card">
+            <h2>同期されないもの</h2>
+            <ul>
+                <li>Gemini API キー</li>
+                <li>保存済み API キー名</li>
+                <li>失敗した録音の保管データ</li>
+            </ul>
+        </section>
+
+        <section class="card">
+            <h2>Firestore ルールの例</h2>
+            <div class="note">
+                rules_version = '2';<br>
+                service cloud.firestore {<br>
+                &nbsp;&nbsp;match /databases/{database}/documents {<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;match /users/{userId}/appState/{docId} {<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;allow read, write: if request.auth != null &amp;&amp; request.auth.uid == userId;<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;}<br>
+                &nbsp;&nbsp;}<br>
+                }<br>
+            </div>
+        </section>
+
         <section class="note">
             このガイドはアプリ内の説明を減らすための別ページです。普段はアプリ本体だけ使い、困ったときだけここを見れば大丈夫です。
         </section>

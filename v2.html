@@ -4,8 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Voice Inbox V2">
     <meta name="theme-color" content="#f6f0e8">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/v2-icon-192.png">
+    <link rel="apple-touch-icon" href="icons/v2-icon-180.png">
     <link rel="manifest" href="manifest-v2.json">
     <title>Voice Inbox V2</title>
     <style>
@@ -96,7 +100,8 @@
         .ghost-btn,
         .soft-btn,
         .primary-btn,
-        .icon-btn {
+        .icon-btn,
+        .install-btn {
             border: none;
             cursor: pointer;
             transition: transform 0.18s ease, opacity 0.18s ease, background 0.18s ease;
@@ -118,8 +123,24 @@
         .icon-btn:hover,
         .ghost-btn:hover,
         .soft-btn:hover,
-        .primary-btn:hover {
+        .primary-btn:hover,
+        .install-btn:hover {
             transform: translateY(-1px);
+        }
+
+        .install-btn {
+            min-height: 46px;
+            padding: 0 16px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            white-space: nowrap;
+            background: rgba(255, 255, 255, 0.88);
+            color: var(--accent-strong);
+            border: 1px solid rgba(217, 95, 63, 0.16);
+            box-shadow: var(--shadow);
+            font-weight: 700;
         }
 
         .hero-card,
@@ -650,6 +671,7 @@
             .topbar-actions {
                 width: 100%;
                 justify-content: flex-end;
+                flex-wrap: wrap;
             }
 
             .recorder-footer {
@@ -668,6 +690,10 @@
             .soft-btn,
             .ghost-btn {
                 width: 100%;
+            }
+
+            .topbar-actions .install-btn {
+                width: auto;
             }
 
             .task-item {
@@ -694,6 +720,7 @@
                 <p class="subtitle">録音中はAPIを叩かず、停止後にGeminiへ1回だけ送ってタスク化します。</p>
             </div>
             <div class="topbar-actions">
+                <button id="install-btn" class="install-btn" type="button" hidden>アプリを追加</button>
                 <button id="new-session-btn" class="icon-btn" type="button" aria-label="結果をリセット" title="結果をリセット">↺</button>
                 <button id="settings-btn" class="icon-btn" type="button" aria-label="設定" title="設定">⚙</button>
             </div>
@@ -874,6 +901,7 @@
         const copyTasksBtn = document.getElementById('copy-tasks-btn');
         const clearCompletedBtn = document.getElementById('clear-completed-btn');
         const copyTranscriptBtn = document.getElementById('copy-transcript-btn');
+        const installBtn = document.getElementById('install-btn');
         const newSessionBtn = document.getElementById('new-session-btn');
 
         const settingsBtn = document.getElementById('settings-btn');
@@ -913,6 +941,7 @@
         let waveFrame = null;
         let toastTimer = null;
         let dbPromise = null;
+        let deferredInstallPrompt = null;
 
         loadState();
         migrateLegacyApiKey();
@@ -920,6 +949,7 @@
         renderAll();
         drawWaveform();
         hydratePendingRecording();
+        setupPwa();
 
         function loadState() {
             try {
@@ -1318,6 +1348,67 @@
 
             if (toastTimer) clearTimeout(toastTimer);
             toastTimer = setTimeout(() => toast.classList.remove('show'), 2800);
+        }
+
+        function isStandaloneMode() {
+            return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+        }
+
+        function updateInstallButton() {
+            installBtn.hidden = !deferredInstallPrompt || isStandaloneMode();
+        }
+
+        async function setupPwa() {
+            updateInstallButton();
+
+            window.addEventListener('beforeinstallprompt', event => {
+                event.preventDefault();
+                deferredInstallPrompt = event;
+                updateInstallButton();
+            });
+
+            window.addEventListener('appinstalled', () => {
+                deferredInstallPrompt = null;
+                updateInstallButton();
+                showToast('アプリとしてインストールされました');
+            });
+
+            if (!('serviceWorker' in navigator)) return;
+
+            try {
+                await navigator.serviceWorker.register('./sw-v2.js', { scope: './' });
+            } catch (error) {
+                console.error('Service worker registration failed', error);
+            }
+        }
+
+        async function promptInstall() {
+            if (isStandaloneMode()) {
+                showToast('この端末ではすでにアプリ表示で使えます');
+                return;
+            }
+
+            if (!deferredInstallPrompt) {
+                showToast('ブラウザのメニューからホーム画面に追加してください');
+                return;
+            }
+
+            const installPrompt = deferredInstallPrompt;
+            deferredInstallPrompt = null;
+            updateInstallButton();
+
+            try {
+                installPrompt.prompt();
+                const choice = await installPrompt.userChoice;
+                if (choice?.outcome === 'accepted') {
+                    showToast('インストールを開始しました');
+                } else {
+                    showToast('インストールは見送りました');
+                }
+            } catch (error) {
+                console.error('Install prompt failed', error);
+                showToast('インストールを開始できませんでした');
+            }
         }
 
         function openSettings() {
@@ -2012,6 +2103,7 @@
             showToast('結果をリセットしました');
         });
 
+        installBtn.addEventListener('click', promptInstall);
         settingsBtn.addEventListener('click', openSettings);
         closeSettingsBtn.addEventListener('click', closeSettings);
         profileSelect.addEventListener('change', event => {

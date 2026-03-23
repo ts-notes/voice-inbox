@@ -307,9 +307,10 @@
         }
 
         .primary-btn {
+            width: 118px;
             min-width: 118px;
             height: 118px;
-            padding: 0 20px;
+            padding: 0 14px;
             border-radius: 50%;
             color: #fff7f2;
             background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
@@ -318,6 +319,13 @@
             font-weight: 700;
             position: relative;
             z-index: 1;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            line-height: 1.25;
+            white-space: normal;
+            flex-shrink: 0;
         }
 
         .primary-btn.processing {
@@ -1111,7 +1119,7 @@
 
             if (phase === 'ready') {
                 statusText.textContent = message || '整理完了';
-                recordBtn.textContent = 'もう一度録音';
+                recordBtn.textContent = '再録音';
                 recordBtn.className = 'primary-btn';
                 recorderHelp.textContent = '前回の結果は下に残したまま、次の録音を続けられます。';
                 return;
